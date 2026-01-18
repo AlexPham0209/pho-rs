@@ -190,6 +190,11 @@ impl Lexer {
                     self.tokens.push(digit);
                 }
 
+                '\"' => {
+                    let str = self.string();
+                    self.tokens.push(str);
+                }
+
                 c if c.is_alphabetic() => {
                     let token = self.identifier();
                     self.tokens.push(token);
@@ -204,6 +209,8 @@ impl Lexer {
                 '\r' | '\t' | ' ' | _ => {
                     self.advance();
                 }
+
+                
             };
         }
 
@@ -272,6 +279,20 @@ impl Lexer {
         Token::new(token_type, self.line, start_col, self.col, self.pos)
     }
 
+    fn string(&mut self ) -> Token {
+        self.advance();
+        let start = self.pos;
+        let start_col = self.col;
+
+        while self.peek().is_some() && self.peek().unwrap() != '\"' {
+            self.advance();
+        }
+        
+        let str = String::from(&self.code[start..self.pos]);
+        self.advance();
+        
+        Token::new(TokenType::String(str), self.line, start_col, self.col, self.pos)
+    }
     fn get_number(s: &str) -> Option<NumberType> {
         if let Ok(i) = s.parse::<i32>() {
             // inferred as isize from next line
