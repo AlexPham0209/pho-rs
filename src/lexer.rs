@@ -209,8 +209,6 @@ impl Lexer {
                 '\r' | '\t' | ' ' | _ => {
                     self.advance();
                 }
-
-                
             };
         }
 
@@ -255,31 +253,34 @@ impl Lexer {
         let start = self.pos;
         let start_col = self.col;
 
-        while self.is_character() {
+        while self.is_character() || self.is_numeric() {
             self.advance();
         }
 
         let keyword = String::from(&self.code[start..self.pos]);
-        let token_type = match keyword.as_str() {
-            "class" => TokenType::Class,
-            "fun" => TokenType::Function,
-            "if" => TokenType::If,
-            "else" => TokenType::Else,
-            "for" => TokenType::For,
-            "while" => TokenType::While,
-            "and" => TokenType::And,
-            "or" => TokenType::Or,
-            "true" => TokenType::True,
-            "false" => TokenType::False,
-            "ret" => TokenType::Return,
-            "var" => TokenType::Variable,
-            _ => TokenType::Identifier(keyword),
+        let token_type = {
+            use TokenType::*;
+            match keyword.as_str() {
+                "class" => Class,
+                "fun" => Function,
+                "if" => If,
+                "else" => Else,
+                "for" => For,
+                "while" => While,
+                "and" => And,
+                "or" => Or,
+                "true" => True,
+                "false" => False,
+                "ret" => Return,
+                "var" => Variable,
+                _ => Identifier(keyword),
+            }
         };
 
         Token::new(token_type, self.line, start_col, self.col, self.pos)
     }
 
-    fn string(&mut self ) -> Token {
+    fn string(&mut self) -> Token {
         self.advance();
         let start = self.pos;
         let start_col = self.col;
@@ -287,11 +288,17 @@ impl Lexer {
         while self.peek().is_some() && self.peek().unwrap() != '\"' {
             self.advance();
         }
-        
+
         let str = String::from(&self.code[start..self.pos]);
         self.advance();
-        
-        Token::new(TokenType::String(str), self.line, start_col, self.col, self.pos)
+
+        Token::new(
+            TokenType::String(str),
+            self.line,
+            start_col,
+            self.col,
+            self.pos,
+        )
     }
     fn get_number(s: &str) -> Option<NumberType> {
         if let Ok(i) = s.parse::<i32>() {

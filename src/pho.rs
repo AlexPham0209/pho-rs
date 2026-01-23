@@ -1,4 +1,4 @@
-use crate::lexer::Lexer;
+use crate::{compiler::Chunk, lexer::Lexer};
 
 struct Pho;
 

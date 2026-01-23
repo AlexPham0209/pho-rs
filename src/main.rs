@@ -1,4 +1,4 @@
-use crate::lexer::Lexer;
+use crate::{compiler::Chunk, lexer::Lexer};
 
 mod compiler;
 mod lexer;
@@ -10,4 +10,12 @@ fn main() {
     for c in &lexer.tokens {
         println!("{:?}", c);
     }
+    
+    let mut chunk = Chunk::new();
+    chunk.write(1);
+    chunk.write(1);
+    chunk.write(1);
+    chunk.write(1);
+
+    println!("{}", chunk.disassemble());
 }
