@@ -391,7 +391,23 @@ mod tests {
     }
 
     #[test]
-    fn advance_test() {
-        
+    fn current_advance_test() {
+        let tokens = vec![
+            Token::new(TokenType::Add, "+".to_string(), 0, 0, 0, 0),
+            Token::new(TokenType::Sub, "-".to_string(), 0, 0, 0, 0),
+            Token::new(TokenType::Multiply, "*".to_string(), 0, 0, 0, 0),
+        ];
+        let mut parser = Parser::from_tokens(&tokens);
+        let token = parser.current();
+        parser.advance();
+        assert_eq!(token.unwrap(), TokenType::Add);
+
+        let token = parser.current();
+        parser.advance();
+        assert_eq!(token.unwrap(), TokenType::Sub);
+
+        let token = parser.current();
+        parser.advance();
+        assert_eq!(token.unwrap(), TokenType::Multiply);
     }
 }
