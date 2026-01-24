@@ -60,7 +60,7 @@ factor = exponent (('*' | '/' | '//') exponent)*
 exponent = unary '**' unary
 unary = ('!' | '-') unary | call | primary
 call = identifier ('(' arguments ')' | '.' identifier)* 
-arguments =  identifier (',' identifier)* 
+arguments =  primary (',' primary)* 
 primary = string | float | int | bool | "(" expression ")"
 
 types = 'string'
