@@ -1,67 +1,82 @@
-Start -> Declaration* EOS
-Declaration -> Class | Function | Statement
+start = declaration* eos
+declaration = class | function | statement
 
-Statements -> Statement*
-Statement -> If
-    | Switch
-    | For
-    | While 
-    | Function
-    | Expression 
-    | Return
-    | Var
+statements = statement*
+statement = if
+    | switch
+    | for
+    | while 
+    | expression 
+    | return
+    | var
+    | var_assign
+    | expression
 
-# Class
-Class -> 'class' Identifier '{' Declaration* '}'
+block = '{' statements '}'
 
-# Function
-Function -> 'fun' Identifier '(' Parameters ')' '{' Statements '}'
-Parameters -> Identifier (',' Identifier)*
+# class
+class = 'class' identifier '{' (var | function)* '}'
 
-# Return
-Return -> 'return' Expression?
+# function
+function = 'fun' identifier '(' parameters ')' '{' statements '}'
+parameters = identifier (',' identifier)*
 
-# Variable
-Var -> 'let' Identifier '=' Expression
+# return
+return = 'ret' expression?
 
-# If Statement
-If -> 'if' Expression '{' Statements '}' Elif* Else?
-Elif -> 'elif' Expression '{' Statements '}'
-Else -> 'else' Expression '{' Statements '}'
+# variable
+var = 'set' identifier '=' expression
 
-# Switch Statement
-Switch -> 'switch' Expression '{' Match* '}'
-Match -> 'case' Expression '{' Statements '}'
+# varassign
+var_assign = (call ".")? identifier ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '**=') expression
 
-# While 
-While -> 'while' Expression '{' Statements '}'
+# if statement
+if = 'if' expression block elif* else?
+elif = 'elif' expression block
+else = 'else' expression block
 
-# For
-For -> 'for' Identifier 'in' (Identifier | Range) '{' Statements '}'
+# switch statement
+switch = 'switch' expression '{' match* '}'
+match = 'case' expression block
 
-# Range
-Range -> Int ('..' | '..=') Int?  
+# while 
+while = 'while' expression '{' statements '}'
 
-# Expressions
-Expression -> Equality
-Equality -> Comparison ('==' | '!=') Comparison
-Comparison -> Term (('>' | '>=' | '<' | '<=') Term)*
-Term -> Factor (('+' | '-') Factor)*
-Factor -> Unary (('*' | '/' | '//') Unary)*
-Unary -> ('!' | '-') Unary | Primary | Call
-Call -> Identifier '(' Arguments ')'
-Arguments ->  Identifier (',' Identifier)* 
-Primary -> String | Identifier | Float | Int
+# for
+for = 'for' identifier 'in' (identifier | range) block
 
-# Types
-Identifier -> Alpha (Alpha | Digit)*
-String ->  '"' (Alpha | Digit)* '"' 
-Float -> Digit* '.' Digit*
-Int -> Digit+
+# range
+range = int ('..' | '..=') int?  
 
-Digit -> 0 - 9
-Alpha -> 'a' - 'z' | 'A' - 'Z'
+# expressions
+expression = or 
 
-Types -> 'string'
+or = and '(or' or)?
+and = equality ('and' equality)*
+equality = comparison (('==' | '!=') comparison)*
+comparison = term (('>' | '>=' | '<' | '<=') term)*
+term = factor (('+' | '-') factor)*
+factor = exponent (('*' | '/' | '//') exponent)*
+exponent = unary '**' unary
+unary = ('!' | '-') unary | call | primary
+call = identifier ('(' arguments ')' | '.' identifier)* 
+arguments =  identifier (',' identifier)* 
+primary = string | float | int | bool | "(" expression ")"
+
+types = 'string'
     | 'int'
     | 'float'
+    | 'bool'
+
+# Lexical Grammar Rules
+identifier = alpha (alpha | digit)*
+string =  '"' (alpha | digit)* '"' 
+float = digit* ('.' digit*)?
+int = digit+
+bool = 'true' | 'false'
+null = 'null'
+
+digit = 0 - 9
+alpha = 'a' - 'z' | 'A' - 'Z' | '_'
+
+

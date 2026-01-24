@@ -2,14 +2,14 @@ use core::panic;
 use std::{fs::File, io::Read, process::ExitCode, ptr::read};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum NumberType {
+pub enum NumberType {
     Float(f32),
     Int(i32),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum TokenType {
-    Identifier(String),
+pub enum TokenType {
+    Identifier,
     String(String),
     Number(NumberType),
 
@@ -17,22 +17,40 @@ enum TokenType {
     Class,
     Variable,
     Function,
+
     For,
     While,
+
     If,
+    Elif,
     Else,
+    Switch,
+    Case,
+
     Or,
     And,
     Not,
     True,
     False,
+
     Return,
+    In,
 
     // Operators
-    Plus,
-    Minus,
-    Divide,
+    Add,
+    Sub,
     Multiply,
+    Exponent,
+    Divide,
+    IntDivide,
+
+    // Assign operators
+    AddAssign,
+    SubAssign,
+    MultiplyAssign,
+    ExponentAssign,
+    DivideAssign,
+    IntDivideAssign,
 
     // Boolean Operators
     Equal,
@@ -53,6 +71,13 @@ enum TokenType {
 
     Colon,
     SemiColon,
+    Comma,
+
+    Dot,
+    Range,
+    RangeEqual,
+
+    Null,
 
     EOS,
 }
@@ -60,6 +85,7 @@ enum TokenType {
 #[derive(Debug)]
 pub struct Token {
     pub token_type: TokenType,
+    pub lexeme: String,
     pub line: usize,
     pub start: usize,
     pub end: usize,
@@ -76,9 +102,17 @@ pub struct Lexer {
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, line: usize, start: usize, end: usize, pos: usize) -> Token {
+    pub fn new(
+        token_type: TokenType,
+        lexeme: String,
+        line: usize,
+        start: usize,
+        end: usize,
+        pos: usize,
+    ) -> Token {
         Token {
             token_type: token_type,
+            lexeme,
             line,
             start,
             end,
@@ -86,8 +120,15 @@ impl Token {
         }
     }
 
-    pub fn from_lexer(token_type: TokenType, lexer: &Lexer) -> Token {
-        Token::new(token_type, lexer.line, lexer.col, lexer.col + 1, lexer.pos)
+    pub fn from_lexer(token_type: TokenType, lexeme: String, lexer: &Lexer) -> Token {
+        Token::new(
+            token_type,
+            lexeme,
+            lexer.line,
+            lexer.col,
+            lexer.col + 1,
+            lexer.pos,
+        )
     }
 }
 
@@ -116,18 +157,170 @@ impl Lexer {
     fn parse(&mut self) {
         while let Some(c) = self.peek() {
             match c {
-                '+' => self.create_token(TokenType::Plus),
-                '-' => self.create_token(TokenType::Minus),
-                '/' => self.create_token(TokenType::Divide),
-                '*' => self.create_token(TokenType::Multiply),
-                '(' => self.create_token(TokenType::OpenParenthesis),
-                ')' => self.create_token(TokenType::CloseParenthesis),
-                '{' => self.create_token(TokenType::OpenCurlyBrace),
-                '}' => self.create_token(TokenType::CloseCurlyBrace),
-                '[' => self.create_token(TokenType::OpenBracket),
-                ']' => self.create_token(TokenType::CloseBracket),
-                ';' => self.create_token(TokenType::SemiColon),
-                ':' => self.create_token(TokenType::Colon),
+                '(' => self.create_token(TokenType::OpenParenthesis, c.to_string()),
+                ')' => self.create_token(TokenType::CloseParenthesis, c.to_string()),
+                '{' => self.create_token(TokenType::OpenCurlyBrace, c.to_string()),
+                '}' => self.create_token(TokenType::CloseCurlyBrace, c.to_string()),
+                '[' => self.create_token(TokenType::OpenBracket, c.to_string()),
+                ']' => self.create_token(TokenType::CloseBracket, c.to_string()),
+                ';' => self.create_token(TokenType::SemiColon, c.to_string()),
+                ':' => self.create_token(TokenType::Colon, c.to_string()),
+                ',' => self.create_token(TokenType::Comma, c.to_string()),
+
+                '+' => {
+                    let start = self.col;
+                    let match_token = self.match_token('=');
+
+                    let token_type = if match_token {
+                        TokenType::AddAssign
+                    } else {
+                        TokenType::Add
+                    };
+
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
+                    self.tokens.push(token);
+                }
+
+                '-' => {
+                    let start = self.col;
+                    let match_token = self.match_token('=');
+
+                    let token_type = if match_token {
+                        TokenType::SubAssign
+                    } else {
+                        TokenType::Sub
+                    };
+
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
+                    self.tokens.push(token);
+                }
+
+                '/' => {
+                    let start = self.col;
+                    let curr = self.advance();
+                    let next = self.peek();
+                    let following = self.next();
+
+                    let token_type = if let Some(next_val) = next
+                        && let Some(following_val) = following
+                        && next_val == '/'
+                        && following_val == '='
+                    {
+                        self.advance();
+                        self.advance();
+                        TokenType::IntDivideAssign
+                    } else {
+                        match next {
+                            Some('/') => {
+                                self.advance();
+                                TokenType::IntDivide
+                            }
+                            Some('=') => {
+                                self.advance();
+                                TokenType::DivideAssign
+                            }
+                            _ => TokenType::Divide,
+                        }
+                    };
+
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
+                    self.tokens.push(token);
+                }
+
+                '*' => {
+                    let start = self.col;
+                    let curr = self.advance();
+                    let next = self.peek();
+                    let following = self.next();
+
+                    let token_type = if let Some(next_val) = next
+                        && let Some(following_val) = following
+                        && next_val == '*'
+                        && following_val == '='
+                    {
+                        self.advance();
+                        self.advance();
+                        TokenType::ExponentAssign
+                    } else {
+                        match next {
+                            Some('*') => {
+                                self.advance();
+                                TokenType::Exponent
+                            }
+                            Some('=') => {
+                                self.advance();
+                                TokenType::MultiplyAssign
+                            }
+                            _ => TokenType::Multiply,
+                        }
+                    };
+
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
+                    self.tokens.push(token);
+                }
+
+                '.' => {
+                    let start = self.col;
+                    let curr = self.advance();
+                    let next = self.peek();
+                    let following = self.next();
+
+                    let token_type = if let Some(next_val) = next
+                        && let Some(following_val) = following
+                        && next_val == '.'
+                        && following_val == '='
+                    {
+                        self.advance();
+                        self.advance();
+                        TokenType::RangeEqual
+                    } else {
+                        match next {
+                            Some('.') => {
+                                self.advance();
+                                TokenType::Range
+                            }
+                            _ => TokenType::Dot,
+                        }
+                    };
+
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
+                    self.tokens.push(token);
+                }
 
                 '=' => {
                     let start = self.col;
@@ -139,7 +332,14 @@ impl Lexer {
                         TokenType::Equal
                     };
 
-                    let token = Token::new(token_type, self.line, start, self.col, self.pos);
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
                     self.tokens.push(token);
                 }
 
@@ -153,7 +353,14 @@ impl Lexer {
                         TokenType::Not
                     };
 
-                    let token = Token::new(token_type, self.line, start, self.col, self.pos);
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
                     self.tokens.push(token);
                 }
 
@@ -167,7 +374,14 @@ impl Lexer {
                         TokenType::Greater
                     };
 
-                    let token = Token::new(token_type, self.line, start, self.col, self.pos);
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
                     self.tokens.push(token);
                 }
 
@@ -181,7 +395,14 @@ impl Lexer {
                         TokenType::Less
                     };
 
-                    let token = Token::new(token_type, self.line, start, self.col, self.pos);
+                    let token = Token::new(
+                        token_type,
+                        c.to_string(),
+                        self.line,
+                        start,
+                        self.col,
+                        self.pos,
+                    );
                     self.tokens.push(token);
                 }
 
@@ -206,14 +427,19 @@ impl Lexer {
                     self.advance();
                 }
 
-                '\r' | '\t' | ' ' | _ => {
+                '\r' | '\t' | ' ' => {
                     self.advance();
+                }
+
+                _ => {
+                    panic!("Invalid");
                 }
             };
         }
 
         self.tokens.push(Token::new(
             TokenType::EOS,
+            "EOS".to_string(),
             self.line,
             self.col,
             self.col + 1,
@@ -229,6 +455,16 @@ impl Lexer {
             self.advance();
         }
 
+        // Consume more if there is a dot
+        if let Some(val) = self.peek()
+            && val == '.'
+        {
+            self.advance();
+            while self.is_numeric() {
+                self.advance();
+            }
+        }
+
         let num = match Self::get_number(&self.code[start..self.pos]) {
             Some(num) => num,
             None => {
@@ -242,6 +478,7 @@ impl Lexer {
 
         Token::new(
             TokenType::Number(num),
+            self.code[start..self.pos].to_string(),
             self.line,
             start_col,
             self.col,
@@ -264,6 +501,7 @@ impl Lexer {
                 "class" => Class,
                 "fun" => Function,
                 "if" => If,
+                "elif" => Elif,
                 "else" => Else,
                 "for" => For,
                 "while" => While,
@@ -272,12 +510,18 @@ impl Lexer {
                 "true" => True,
                 "false" => False,
                 "ret" => Return,
-                "var" => Variable,
-                _ => Identifier(keyword),
+                "set" => Variable,
+                "switch" => Switch,
+                "case" => Case,
+                "in" => In,
+                "null" => Null,
+                _ => Identifier,
             }
         };
 
-        Token::new(token_type, self.line, start_col, self.col, self.pos)
+        Token::new(
+            token_type, keyword, self.line, start_col, self.col, self.pos,
+        )
     }
 
     fn string(&mut self) -> Token {
@@ -293,7 +537,8 @@ impl Lexer {
         self.advance();
 
         Token::new(
-            TokenType::String(str),
+            TokenType::String(str.clone()),
+            str,
             self.line,
             start_col,
             self.col,
@@ -346,7 +591,7 @@ impl Lexer {
         let c = self.peek();
 
         match c {
-            Some(val) => val.is_numeric() || val == '.',
+            Some(val) => val.is_numeric(),
             None => false,
         }
     }
@@ -360,8 +605,8 @@ impl Lexer {
         }
     }
 
-    fn create_token(&mut self, token_type: TokenType) {
-        let token = Token::from_lexer(token_type, &self);
+    fn create_token(&mut self, token_type: TokenType, lexeme: String) {
+        let token = Token::from_lexer(token_type, lexeme, &self);
         self.tokens.push(token);
         self.advance();
     }
