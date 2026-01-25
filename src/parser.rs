@@ -13,6 +13,7 @@ pub struct Parser<'a> {
     curr: usize,
 }
 
+#[derive(Debug)]
 pub enum Error {
     ExpectedExpression,
     UnexpectedToken(TokenType),
@@ -27,13 +28,24 @@ pub enum Error {
 }
 
 impl<'a> Parser<'a> {
-    fn from_tokens(tokens: &'a Vec<Token>) -> Parser<'a> {
+    pub fn from_tokens(tokens: &'a Vec<Token>) -> Parser<'a> {
         Parser { tokens, curr: 0 }
     }
-    fn parse(&mut self) {
+    pub fn parse(&mut self) -> Vec<Expr> {
+        let mut expressions = Vec::<Expr>::new();
         while !self.is_at_end() {
-            self.declaration();
+            match self.expression() {
+                Ok(expr) => {
+                    println!("{:?}", expr);
+                    expressions.push(expr)
+                },
+                Err(err) => {
+                    println!("{:?}", err);
+                }
+            }
         }
+
+        expressions
     }
 
     fn declaration(&mut self) -> Result<Statement, Error> {
@@ -99,7 +111,7 @@ impl<'a> Parser<'a> {
     fn or(&mut self) -> Result<Expr, Error> {
         let left = self.and()?;
 
-        if !self.check(TokenType::Or) {
+        if self.check(TokenType::Or) {
             let right: Expr = self.or()?;
             return Ok(Expr::LogicalOp(LogicalOp {
                 op: LogicalOpType::Or,
@@ -114,8 +126,8 @@ impl<'a> Parser<'a> {
     fn and(&mut self) -> Result<Expr, Error> {
         let left = self.equality()?;
 
-        if !self.check(TokenType::And) {
-            let right: Expr = self.equality()?;
+        if self.check(TokenType::And) {
+            let right: Expr = self.and()?;
             return Ok(Expr::LogicalOp(LogicalOp {
                 op: LogicalOpType::And,
                 left: Box::new(left),
@@ -155,7 +167,7 @@ impl<'a> Parser<'a> {
         ]) {
             let op = self.prev().unwrap();
             let op = Parser::convert_to_logical_op(op);
-            let right = self.equality()?;
+            let right = self.comparison()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
                 op: op,
@@ -169,11 +181,12 @@ impl<'a> Parser<'a> {
 
     fn term(&mut self) -> Result<Expr, Error> {
         let left = self.factor()?;
-
+        
         if self.check_tokens(&[TokenType::Add, TokenType::Sub]) {
             let op = self.prev().unwrap();
             let op = Parser::convert_to_binary_op(op);
             let right = self.term()?;
+
             return Ok(Expr::BinaryOp(BinaryOp {
                 op: op,
                 left: Box::new(left),
@@ -204,7 +217,7 @@ impl<'a> Parser<'a> {
     fn exponent(&mut self) -> Result<Expr, Error> {
         let left = self.unary()?;
 
-        if !self.check(TokenType::Exponent) {
+        if self.check(TokenType::Exponent) {
             let right: Expr = self.exponent()?;
             return Ok(Expr::BinaryOp(BinaryOp {
                 op: BinaryOpType::Exponent,
@@ -230,7 +243,8 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        self.primary()
+        let primary = self.primary()?;
+        Ok(primary)
     }
 
     fn primary(&mut self) -> Result<Expr, Error> {
@@ -266,30 +280,25 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Result<&Token, Error> {
-        if self.is_at_end() {
-            return Err(Error::EOS);
-        }
+        if !self.is_at_end() {
+            self.curr += 1;
+        } 
 
-        self.curr += 1;
         let curr: &Token = self.prev().unwrap();
         Ok(curr)
     }
 
     fn check_tokens(&mut self, tokens: &[TokenType]) -> bool {
-        let valid = tokens.iter().cloned().any(|token| {
-            if self.is_at_end() {
-                return false;
-            }
-
-            let curr = self.current().unwrap();
-            curr == token
-        });
-
-        if valid {
-            let _ = self.advance();
+        if tokens
+            .iter()
+            .cloned()
+            .any(|token| !self.is_at_end() && self.current().unwrap() == token)
+        {
+            self.advance();
+            return true;
         }
 
-        return valid;
+        false
     }
 
     fn check(&mut self, expected: TokenType) -> bool {

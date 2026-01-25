@@ -154,6 +154,22 @@ impl Lexer {
         lexer
     }
 
+    pub fn from_string(code: &str) -> Lexer {
+        let mut code = code.trim().to_string();
+
+        let mut lexer = Lexer {
+            code,
+            tokens: Vec::new(),
+            line: 1,
+            col: 1,
+            pos: 0,
+        };
+
+        lexer.parse();
+        lexer
+    }
+
+
     fn parse(&mut self) {
         while let Some(c) = self.peek() {
             match c {
