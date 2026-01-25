@@ -6,10 +6,11 @@ mod expr;
 mod lexer;
 mod parser;
 mod pho;
+mod statement;
 mod vm;
 
 fn main() {
-    let lexer = Lexer::from_string("(6 - 2 ** -4 >= 5) and true");
+    let lexer = Lexer::from_string("ret (5 + 10) and true");
     for c in &lexer.tokens {
         println!("{:?}", c);
     }

@@ -6,11 +6,11 @@ statement = if
     | switch
     | for
     | while 
-    | expression 
     | return
     | var
     | var_assign
-    | expression
+    | expression_statement
+    | block
 
 block = '{' statements '}'
 
@@ -49,6 +49,7 @@ for = 'for' identifier 'in' (identifier | range) block
 range = int ('..' | '..=') int?  
 
 # expressions
+expression_statement = expression
 expression = or 
 
 or = and '(or' or)?

@@ -169,19 +169,18 @@ impl Lexer {
         lexer
     }
 
-
     fn parse(&mut self) {
         while let Some(c) = self.peek() {
             match c {
-                '(' => self.create_token(TokenType::OpenParenthesis, c.to_string()),
-                ')' => self.create_token(TokenType::CloseParenthesis, c.to_string()),
-                '{' => self.create_token(TokenType::OpenCurlyBrace, c.to_string()),
-                '}' => self.create_token(TokenType::CloseCurlyBrace, c.to_string()),
-                '[' => self.create_token(TokenType::OpenBracket, c.to_string()),
-                ']' => self.create_token(TokenType::CloseBracket, c.to_string()),
-                ';' => self.create_token(TokenType::SemiColon, c.to_string()),
-                ':' => self.create_token(TokenType::Colon, c.to_string()),
-                ',' => self.create_token(TokenType::Comma, c.to_string()),
+                '(' => self.create_token(TokenType::OpenParenthesis),
+                ')' => self.create_token(TokenType::CloseParenthesis),
+                '{' => self.create_token(TokenType::OpenCurlyBrace),
+                '}' => self.create_token(TokenType::CloseCurlyBrace),
+                '[' => self.create_token(TokenType::OpenBracket),
+                ']' => self.create_token(TokenType::CloseBracket),
+                ';' => self.create_token(TokenType::SemiColon),
+                ':' => self.create_token(TokenType::Colon),
+                ',' => self.create_token(TokenType::Comma),
 
                 '+' => {
                     let start = self.col;
@@ -621,7 +620,8 @@ impl Lexer {
         }
     }
 
-    fn create_token(&mut self, token_type: TokenType, lexeme: String) {
+    fn create_token(&mut self, token_type: TokenType) {
+        let lexeme = self.peek().unwrap().to_string();
         let token = Token::from_lexer(token_type, lexeme, &self);
         self.tokens.push(token);
         self.advance();

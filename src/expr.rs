@@ -1,12 +1,6 @@
 use crate::lexer::NumberType;
 
 #[derive(Debug)]
-pub enum Statement {
-    Class(Class),
-    Variable(Variable),
-}
-
-#[derive(Debug)]
 pub enum Expr {
     LogicalOp(LogicalOp),
     BinaryOp(BinaryOp),
@@ -21,16 +15,6 @@ pub enum Literal {
     Float(f32),
     Bool(bool),
     Null,
-}
-#[derive(Debug)]
-pub struct Class {
-    variables: Vec<Variable>,
-}
-
-#[derive(Debug)]
-pub struct Variable {
-    pub identifier: String,
-    pub value: Box<Expr>,
 }
 
 #[derive(Debug)]

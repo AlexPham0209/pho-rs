@@ -1,11 +1,9 @@
 use core::panic;
 
 use crate::{
-    expr::{
-        self, BinaryOp, BinaryOpType, Expr, LogicalOp, LogicalOpType, Statement, UnaryOp,
-        UnaryOpType, Variable,
-    },
+    expr::{self, BinaryOp, BinaryOpType, Expr, LogicalOp, LogicalOpType, UnaryOp, UnaryOpType},
     lexer::{NumberType, Token, TokenType},
+    statement::{Block, Return, Statement, Variable},
 };
 
 pub struct Parser<'a> {
@@ -15,45 +13,77 @@ pub struct Parser<'a> {
 
 #[derive(Debug)]
 pub enum Error {
-    ExpectedExpression,
     UnexpectedToken(TokenType),
+
     TokenMismatch {
         expected: TokenType,
         actual: TokenType,
         line: usize,
         col: usize,
     },
-    EOS,
-    DeclarationError,
+
+    StatementError {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
+
+    DeclarationError {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
+
+    LogicalOpError {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
+    BinaryOpError {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
+    UnaryOpError {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
+    EOS {
+        token: TokenType,
+        line: usize,
+        col: usize,
+    },
 }
 
 impl<'a> Parser<'a> {
     pub fn from_tokens(tokens: &'a Vec<Token>) -> Parser<'a> {
         Parser { tokens, curr: 0 }
     }
-    pub fn parse(&mut self) -> Vec<Expr> {
-        let mut expressions = Vec::<Expr>::new();
+    pub fn parse(&mut self) -> Vec<Statement> {
+        let mut statements = Vec::<Statement>::new();
         while !self.is_at_end() {
-            match self.expression() {
-                Ok(expr) => {
-                    println!("{:?}", expr);
-                    expressions.push(expr)
-                },
-                Err(err) => {
-                    println!("{:?}", err);
-                }
+            match self.declaration() {
+                Ok(declaration) => statements.push(declaration),
+                Err(error) => todo!(),
             }
         }
 
-        expressions
+        statements
     }
+
+    fn show_errors() {}
 
     fn declaration(&mut self) -> Result<Statement, Error> {
         let token = match self.current() {
-            // Some(TokenType::Class) => Ok(self.class()),
-            // Some(TokenType::Function) => Ok(self.function()),
+            Some(TokenType::Class) => todo!(),
+            Some(TokenType::Function) => todo!(),
             Some(_) => self.statement(),
-            None => Err(Error::DeclarationError),
+            None => Err(Error::DeclarationError {
+                token: self.current().unwrap().clone(),
+                line: self.peek().unwrap().line,
+                col: self.peek().unwrap().start,
+            }),
         };
 
         token
@@ -61,37 +91,51 @@ impl<'a> Parser<'a> {
 
     // fn class(&mut self) -> Result<Statement, Error> {
     //     self.advance();
-    //     let identifier_token = self.advance().expect("Expected identifier");
-    //     let identifier = match &identifier_token.token_type {
-    //         TokenType::Identifier(val) => val,
-    //         _ => panic!("Expected Identifier")
-    //     };
+    //     let identifier = self.consume(TokenType::Identifier)?;
+    //     let lexeme = identifier.lexeme.clone();
 
-    //     self.consume(TokenType::OpenCurlyBrace, "Expected { after identifier");
-    //     let variables = Vec::<Variable>::new();
-    //     while let Some(token) = self.current() {
-    //         let tokens = match token {
-    //             TokenType::Variable => {
-    //                 let variable = self.variable();
+    // }
 
-    //             },
-    //             TokenType::Function => Ok(self.function()),
-    //             _ => return Err(Error::DeclarationError)
-    //         };
-    //     }
+    // fn for_statement(&mut self) -> Result<Statement, Error> {
+    //     self.advance()?;
+    //     let identifier = self.consume(TokenType::Identifier)?;
+    //     let lexeme = identifier.lexeme.clone();
+    //     self.consume(TokenType::In)?;
+    //     let call = self.call()?;
+    //     Ok(
+    //         Statement::For(For {
 
-    //     self.consume(TokenType::CloseCurlyBrace, "Expected } after expression");
+    //         })
+    //     )
     // }
 
     fn statement(&mut self) -> Result<Statement, Error> {
         match self.current() {
             Some(TokenType::Variable) => self.variable(),
-            Some(token) => Err(Error::UnexpectedToken(token)),
-            None => Err(Error::EOS),
+            Some(TokenType::If) => todo!(),
+            Some(TokenType::Switch) => todo!(),
+            Some(TokenType::For) => todo!(),
+            Some(TokenType::While) => todo!(),
+            Some(TokenType::Identifier) => todo!(),
+            Some(TokenType::OpenCurlyBrace) => self.block(),
+            Some(TokenType::Return) => self.return_statement(),
+            Some(token) => self.expression_statement(),
+            Some(TokenType::EOS) | None => Err(Error::EOS {
+                token: self.current().unwrap(),
+                line: self.peek().unwrap().line,
+                col: self.peek().unwrap().line,
+            }),
+
+            Some(_) => Err(Error::StatementError {
+                token: self.current().unwrap(),
+                line: self.peek().unwrap().line,
+                col: self.peek().unwrap().line,
+            }),
         }
     }
 
     fn variable(&mut self) -> Result<Statement, Error> {
+        self.advance()?;
         let identifier = self.consume(TokenType::Identifier)?;
         let lexeme = identifier.lexeme.clone();
         self.consume(TokenType::Equal)?;
@@ -101,6 +145,27 @@ impl<'a> Parser<'a> {
             identifier: lexeme,
             value: Box::new(expression),
         }))
+    }
+
+    fn block(&mut self) -> Result<Statement, Error> {
+        self.advance()?;
+        let mut statements = Vec::<Statement>::new();
+
+        while !self.check(TokenType::CloseCurlyBrace) {
+            statements.push(self.statement()?);
+        }
+
+        Ok(Statement::Block(Block { statements }))
+    }
+
+    fn return_statement(&mut self) -> Result<Statement, Error> {
+        self.advance()?;
+        let expr = self.expression()?;
+        Ok(Statement::Return(Return { expr }))
+    }
+
+    fn expression_statement(&mut self) -> Result<Statement, Error> {
+        Ok(Statement::Expression(self.expression()?))
     }
 
     fn expression(&mut self) -> Result<Expr, Error> {
@@ -143,7 +208,7 @@ impl<'a> Parser<'a> {
 
         if self.check_tokens(&[TokenType::Equal, TokenType::NotEqual]) {
             let op = self.prev().unwrap();
-            let op = Parser::convert_to_logical_op(op);
+            let op = Parser::convert_to_logical_op(op)?;
             let right = self.equality()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -166,7 +231,7 @@ impl<'a> Parser<'a> {
             TokenType::GreaterEqual,
         ]) {
             let op = self.prev().unwrap();
-            let op = Parser::convert_to_logical_op(op);
+            let op = Parser::convert_to_logical_op(op)?;
             let right = self.comparison()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -181,10 +246,10 @@ impl<'a> Parser<'a> {
 
     fn term(&mut self) -> Result<Expr, Error> {
         let left = self.factor()?;
-        
+
         if self.check_tokens(&[TokenType::Add, TokenType::Sub]) {
             let op = self.prev().unwrap();
-            let op = Parser::convert_to_binary_op(op);
+            let op = Parser::convert_to_binary_op(op)?;
             let right = self.term()?;
 
             return Ok(Expr::BinaryOp(BinaryOp {
@@ -202,7 +267,7 @@ impl<'a> Parser<'a> {
 
         if self.check_tokens(&[TokenType::Multiply, TokenType::Divide, TokenType::IntDivide]) {
             let op = self.prev().unwrap();
-            let op = Parser::convert_to_binary_op(op);
+            let op = Parser::convert_to_binary_op(op)?;
             let right = self.factor()?;
             return Ok(Expr::BinaryOp(BinaryOp {
                 op: op,
@@ -231,10 +296,17 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> Result<Expr, Error> {
         if self.check_tokens(&[TokenType::Sub, TokenType::Not]) {
-            let op = match self.prev().unwrap().clone().token_type {
+            let prev = self.prev().unwrap().clone();
+            let op = match &prev.token_type {
                 TokenType::Sub => UnaryOpType::Neg,
                 TokenType::Not => UnaryOpType::Not,
-                _ => panic!("Expected Unary Operator ! or -"),
+                token => {
+                    return Err(Error::BinaryOpError {
+                        token: prev.token_type.clone(),
+                        line: prev.line,
+                        col: prev.start,
+                    });
+                }
             };
             let value = self.unary()?;
             return Ok(Expr::UnaryOp(UnaryOp {
@@ -282,7 +354,7 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Result<&Token, Error> {
         if !self.is_at_end() {
             self.curr += 1;
-        } 
+        }
 
         let curr: &Token = self.prev().unwrap();
         Ok(curr)
@@ -334,27 +406,39 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn convert_to_logical_op(token: &Token) -> LogicalOpType {
+    pub fn convert_to_logical_op(token: &Token) -> Result<LogicalOpType, Error> {
         match token.token_type {
-            TokenType::And => LogicalOpType::And,
-            TokenType::Or => LogicalOpType::Or,
-            TokenType::Less => LogicalOpType::Less,
-            TokenType::LessEqual => LogicalOpType::LessEqual,
-            TokenType::Greater => LogicalOpType::Greater,
-            TokenType::GreaterEqual => LogicalOpType::GreaterEqual,
-            _ => panic!("Expected logical operator token"),
+            TokenType::And => Ok(LogicalOpType::And),
+            TokenType::Or => Ok(LogicalOpType::Or),
+            TokenType::Less => Ok(LogicalOpType::Less),
+            TokenType::LessEqual => Ok(LogicalOpType::LessEqual),
+            TokenType::Greater => Ok(LogicalOpType::Greater),
+            TokenType::GreaterEqual => Ok(LogicalOpType::GreaterEqual),
+            _ => {
+                return Err(Error::UnaryOpError {
+                    token: token.token_type.clone(),
+                    line: token.line,
+                    col: token.start,
+                });
+            }
         }
     }
 
-    pub fn convert_to_binary_op(token: &Token) -> BinaryOpType {
+    pub fn convert_to_binary_op(token: &Token) -> Result<BinaryOpType, Error> {
         match token.token_type {
-            TokenType::Add => BinaryOpType::Add,
-            TokenType::Sub => BinaryOpType::Sub,
-            TokenType::Multiply => BinaryOpType::Multiply,
-            TokenType::Exponent => BinaryOpType::Exponent,
-            TokenType::Divide => BinaryOpType::Divide,
-            TokenType::IntDivide => BinaryOpType::IntDivide,
-            _ => panic!("Expected logical operator token"),
+            TokenType::Add => Ok(BinaryOpType::Add),
+            TokenType::Sub => Ok(BinaryOpType::Sub),
+            TokenType::Multiply => Ok(BinaryOpType::Multiply),
+            TokenType::Exponent => Ok(BinaryOpType::Exponent),
+            TokenType::Divide => Ok(BinaryOpType::Divide),
+            TokenType::IntDivide => Ok(BinaryOpType::IntDivide),
+            _ => {
+                return Err(Error::BinaryOpError {
+                    token: token.token_type.clone(),
+                    line: token.line,
+                    col: token.start,
+                });
+            }
         }
     }
 
