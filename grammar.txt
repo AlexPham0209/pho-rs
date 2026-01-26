@@ -14,7 +14,7 @@ statement = if
 
 block = '{' statements '}'
 
-# class
+# classs
 class = 'class' identifier '{' (var | function)* '}'
 
 # function
@@ -31,9 +31,8 @@ var = 'set' identifier '=' expression
 var_assign = (call ".")? identifier ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '**=') expression
 
 # if statement
-if = 'if' expression block elif* else?
+if = 'if' expression block elif* ('else' block)?
 elif = 'elif' expression block
-else = 'else' expression block
 
 # switch statement
 switch = 'switch' expression '{' match* '}'

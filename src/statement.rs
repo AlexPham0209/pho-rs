@@ -9,6 +9,8 @@ pub enum Statement {
     Block(Block),
     Expression(Expr),
     Return(Return),
+    If(If),
+    Elif(Elif),
 }
 
 #[derive(Debug)]
@@ -36,5 +38,19 @@ pub struct Block {
 
 #[derive(Debug)]
 pub struct Return {
-    pub expr: Expr,
+    pub expr: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct If {
+    pub condition: Box<Expr>,
+    pub block: Box<Block>,
+    pub elifs: Vec<Elif>,
+    pub else_block: Box<Option<Block>>,
+}
+
+#[derive(Debug)]
+pub struct Elif {
+    pub condition: Box<Expr>,
+    pub block: Box<Block>,
 }

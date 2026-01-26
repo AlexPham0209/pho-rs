@@ -10,7 +10,21 @@ mod statement;
 mod vm;
 
 fn main() {
-    let lexer = Lexer::from_string("ret (5 + 10) and true");
+    let lexer = Lexer::from_string(
+        "
+        if (5 == true) {
+            ret 5
+        } 
+
+        elif (6 != 5) {
+            set x = 5
+        }
+        
+        else {
+         
+        }
+    ",
+    );
     for c in &lexer.tokens {
         println!("{:?}", c);
     }

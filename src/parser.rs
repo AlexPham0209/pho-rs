@@ -3,7 +3,7 @@ use core::panic;
 use crate::{
     expr::{self, BinaryOp, BinaryOpType, Expr, LogicalOp, LogicalOpType, UnaryOp, UnaryOpType},
     lexer::{NumberType, Token, TokenType},
-    statement::{Block, Return, Statement, Variable},
+    statement::{self, Block, Elif, If, Return, Statement, Variable},
 };
 
 pub struct Parser<'a> {
@@ -112,7 +112,7 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Statement, Error> {
         match self.current() {
             Some(TokenType::Variable) => self.variable(),
-            Some(TokenType::If) => todo!(),
+            Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Switch) => todo!(),
             Some(TokenType::For) => todo!(),
             Some(TokenType::While) => todo!(),
@@ -158,10 +158,87 @@ impl<'a> Parser<'a> {
         Ok(Statement::Block(Block { statements }))
     }
 
+    fn if_statement(&mut self) -> Result<Statement, Error> {
+        self.advance()?;    
+        
+        // Condition
+        self.consume(TokenType::OpenParenthesis)?;
+        let condition = self.expression()?;
+        self.consume(TokenType::CloseParenthesis)?;
+        
+    
+        // Block
+        let block = match self.block()? {
+            Statement::Block(block) => block,
+            _ => {
+                return Err(Error::StatementError {
+                    token: self.current().unwrap(),
+                    line: self.peek().unwrap().line,
+                    col: self.peek().unwrap().line,
+                });
+            }
+        };
+
+        // Elif blocks
+        let mut elifs = Vec::<Elif>::new();
+        while self.check(TokenType::Elif) {
+            let elif_statement = self.elif_statement()?;
+            elifs.push(elif_statement);
+        }
+
+        // Else blocks
+        let else_block = if self.check(TokenType::Else) {
+            let block = match self.block()? {
+                Statement::Block(block) => block,
+                _ => {
+                    return Err(Error::StatementError {
+                        token: self.current().unwrap(),
+                        line: self.peek().unwrap().line,
+                        col: self.peek().unwrap().start,
+                    });
+                }
+            };
+            Some(block)
+        } else {
+            None
+        };
+
+        Ok(Statement::If(If {
+            condition: Box::new(condition),
+            block: Box::new(block),
+            elifs,
+            else_block: Box::new(else_block),
+        }))
+    }
+
+    fn elif_statement(&mut self) -> Result<Elif, Error> {
+        self.consume(TokenType::OpenParenthesis)?;
+        let condition = self.expression()?;
+        self.consume(TokenType::CloseParenthesis)?;
+
+        let block = match self.block()? {
+            Statement::Block(block) => block,
+            _ => {
+                return Err(Error::StatementError {
+                    token: self.current().unwrap(),
+                    line: self.peek().unwrap().line,
+                    col: self.peek().unwrap().line,
+                });
+            }
+        };
+
+        Ok(Elif {
+            condition: Box::new(condition),
+            block: Box::new(block),
+        })
+    }
+
     fn return_statement(&mut self) -> Result<Statement, Error> {
         self.advance()?;
         let expr = self.expression()?;
-        Ok(Statement::Return(Return { expr }))
+        Ok(Statement::Return(Return {
+            expr: Box::new(expr),
+        }))
     }
 
     fn expression_statement(&mut self) -> Result<Statement, Error> {
@@ -206,9 +283,10 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> Result<Expr, Error> {
         let left = self.comparison()?;
 
-        if self.check_tokens(&[TokenType::Equal, TokenType::NotEqual]) {
+        if self.check_tokens(&[TokenType::EqualEqual, TokenType::NotEqual]) {
             let op = self.prev().unwrap();
             let op = Parser::convert_to_logical_op(op)?;
+            
             let right = self.equality()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -296,11 +374,11 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> Result<Expr, Error> {
         if self.check_tokens(&[TokenType::Sub, TokenType::Not]) {
-            let prev = self.prev().unwrap().clone();
+            let prev = self.prev().unwrap();
             let op = match &prev.token_type {
                 TokenType::Sub => UnaryOpType::Neg,
                 TokenType::Not => UnaryOpType::Not,
-                token => {
+                _ => {
                     return Err(Error::BinaryOpError {
                         token: prev.token_type.clone(),
                         line: prev.line,
@@ -321,6 +399,7 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> Result<Expr, Error> {
         use expr::Literal::*;
+
         match &self.advance()?.token_type {
             TokenType::String(str) => Ok(Expr::Literal(String(str.clone()))),
             TokenType::Number(NumberType::Int(num)) => Ok(Expr::Literal(Int(num.clone()))),
@@ -408,6 +487,8 @@ impl<'a> Parser<'a> {
 
     pub fn convert_to_logical_op(token: &Token) -> Result<LogicalOpType, Error> {
         match token.token_type {
+            TokenType::EqualEqual => Ok(LogicalOpType::Equal),
+            TokenType::NotEqual => Ok(LogicalOpType::NotEqual),
             TokenType::And => Ok(LogicalOpType::And),
             TokenType::Or => Ok(LogicalOpType::Or),
             TokenType::Less => Ok(LogicalOpType::Less),
