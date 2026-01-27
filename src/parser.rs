@@ -76,14 +76,9 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> Result<Statement, Error> {
         let token = match self.current() {
-            Some(TokenType::Class) => todo!(),
-            Some(TokenType::Function) => self.function(),
-            Some(_) => self.statement(),
-            None => Err(Error::DeclarationError {
-                token: self.current().unwrap().clone(),
-                line: self.peek().unwrap().line,
-                col: self.peek().unwrap().start,
-            }),
+            TokenType::Class => todo!(),
+            TokenType::Function => self.function(),
+            _ => self.statement(),
         };
 
         token
@@ -98,26 +93,17 @@ impl<'a> Parser<'a> {
         // Parameters
         self.consume(TokenType::OpenParenthesis)?;
         if self.check(TokenType::Identifier) {
-            parameters.push(self.prev().unwrap().lexeme.clone());
+            parameters.push(self.prev().lexeme.clone());
 
             while self.check(TokenType::Comma) {
                 self.consume(TokenType::Identifier)?;
-                let parameter = self.prev().unwrap().lexeme.clone();
+                let parameter = self.prev().lexeme.clone();
                 parameters.push(parameter);
             }
         }
         self.consume(TokenType::CloseParenthesis)?;
         
-        let block = match self.block()? {
-            Statement::Block(block) => block,
-            _ => {
-                return Err(Error::StatementError {
-                    token: self.current().unwrap(),
-                    line: self.peek().unwrap().line,
-                    col: self.peek().unwrap().line,
-                });
-            }
-        };
+        let block = self.block()?;
 
         Ok(Statement::Function(Function {
             identifier: lexeme,
@@ -151,19 +137,19 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement, Error> {
         match self.current() {
-            Some(TokenType::Variable) => self.variable(),
-            Some(TokenType::If) => self.if_statement(),
-            Some(TokenType::Switch) => todo!(),
-            Some(TokenType::For) => todo!(),
-            Some(TokenType::While) => self.while_statement(),
-            Some(TokenType::OpenCurlyBrace) => self.block(),
-            Some(TokenType::Return) => self.return_statement(),
-            Some(TokenType::EOS) | None => Err(Error::EOS {
-                token: self.current().unwrap(),
-                line: self.peek().unwrap().line,
-                col: self.peek().unwrap().line,
+            TokenType::Variable => self.variable(),
+            TokenType::If => self.if_statement(),
+            TokenType::Switch => todo!(),
+            TokenType::For => todo!(),
+            TokenType::While => self.while_statement(),
+            TokenType::OpenCurlyBrace => Ok(Statement::Block(self.block()?)),
+            TokenType::Return => self.return_statement(),
+            TokenType::EOS => Err(Error::EOS {
+                token: self.current(),
+                line: self.peek().line,
+                col: self.peek().start,
             }),
-            Some(_) => self.expression_statement(),
+            _ => self.expression_statement(),
         }
     }
 
@@ -180,7 +166,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn block(&mut self) -> Result<Statement, Error> {
+    fn block(&mut self) -> Result<Block, Error> {
         self.consume(TokenType::OpenCurlyBrace)?;
         let mut statements = Vec::<Statement>::new();
 
@@ -188,7 +174,7 @@ impl<'a> Parser<'a> {
             statements.push(self.statement()?);
         }
 
-        Ok(Statement::Block(Block { statements }))
+        Ok(Block { statements })
     }
 
     fn if_statement(&mut self) -> Result<Statement, Error> {
@@ -200,17 +186,8 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::CloseParenthesis)?;
 
         // Block
-        let block = match self.block()? {
-            Statement::Block(block) => block,
-            _ => {
-                return Err(Error::StatementError {
-                    token: self.current().unwrap(),
-                    line: self.peek().unwrap().line,
-                    col: self.peek().unwrap().start,
-                });
-            }
-        };
-
+        let block = self.block()?;
+        
         // Elif blocks
         let mut elifs = Vec::<Elif>::new();
         while self.check(TokenType::Elif) {
@@ -220,16 +197,7 @@ impl<'a> Parser<'a> {
 
         // Else blocks
         let else_block = if self.check(TokenType::Else) {
-            let block = match self.block()? {
-                Statement::Block(block) => block,
-                _ => {
-                    return Err(Error::StatementError {
-                        token: self.current().unwrap(),
-                        line: self.peek().unwrap().line,
-                        col: self.peek().unwrap().start,
-                    });
-                }
-            };
+            let block = self.block()?;
             Some(block)
         } else {
             None
@@ -248,16 +216,7 @@ impl<'a> Parser<'a> {
         let condition = self.expression()?;
         self.consume(TokenType::CloseParenthesis)?;
 
-        let block = match self.block()? {
-            Statement::Block(block) => block,
-            _ => {
-                return Err(Error::StatementError {
-                    token: self.current().unwrap(),
-                    line: self.peek().unwrap().line,
-                    col: self.peek().unwrap().line,
-                });
-            }
-        };
+        let block = self.block()?;
 
         Ok(Elif {
             condition: Box::new(condition),
@@ -271,16 +230,7 @@ impl<'a> Parser<'a> {
         let expr = self.expression()?;
         self.consume(TokenType::CloseParenthesis)?;
 
-        let block = match self.block()? {
-            Statement::Block(block) => block,
-            _ => {
-                return Err(Error::StatementError {
-                    token: self.current().unwrap(),
-                    line: self.peek().unwrap().line,
-                    col: self.peek().unwrap().line,
-                });
-            }
-        };
+        let block = self.block()?;
 
         Ok(Statement::While(While {
             condition: Box::new(expr),
@@ -312,7 +262,7 @@ impl<'a> Parser<'a> {
             TokenType::IntDivide,
             TokenType::Equal,
         ]) {
-            let op = self.prev().unwrap().token_type.clone(); 
+            let op = self.prev().token_type.clone(); 
             let value = self.expression()?;
             return Ok(
                 Expr::Assignment(Assignment {
@@ -359,7 +309,7 @@ impl<'a> Parser<'a> {
         let left = self.comparison()?;
 
         if self.check_tokens(&[TokenType::EqualEqual, TokenType::NotEqual]) {
-            let op = self.prev().unwrap().token_type.clone();
+            let op = self.prev().token_type.clone();
             let right = self.equality()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -381,7 +331,7 @@ impl<'a> Parser<'a> {
             TokenType::Greater,
             TokenType::GreaterEqual,
         ]) {
-            let op = self.prev().unwrap().token_type.clone();
+            let op = self.prev().token_type.clone();
             let right = self.comparison()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -398,7 +348,7 @@ impl<'a> Parser<'a> {
         let left = self.factor()?;
 
         if self.check_tokens(&[TokenType::Add, TokenType::Sub]) {
-            let op = self.prev().unwrap().token_type.clone();
+            let op = self.prev().token_type.clone();
             let right = self.term()?;
 
             return Ok(Expr::BinaryOp(BinaryOp {
@@ -415,7 +365,7 @@ impl<'a> Parser<'a> {
         let left = self.exponent()?;
 
         if self.check_tokens(&[TokenType::Multiply, TokenType::Divide, TokenType::IntDivide]) {
-            let op = self.prev().unwrap().token_type.clone();
+            let op = self.prev().token_type.clone();
             let right = self.factor()?;
             return Ok(Expr::BinaryOp(BinaryOp {
                 op: op,
@@ -444,7 +394,7 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> Result<Expr, Error> {
         if self.check_tokens(&[TokenType::Sub, TokenType::Not]) {
-            let prev = self.prev().unwrap();
+            let prev = self.prev();
             let op = prev.token_type.clone();
 
             let value = self.unary()?;
@@ -473,7 +423,7 @@ impl<'a> Parser<'a> {
                 expr
             }
             TokenType::Identifier => Ok(Expr::Literal(Identifier(
-                self.prev().unwrap().lexeme.to_string(),
+                self.prev().lexeme.to_string(),
             ))),
             token => Err(Error::UnexpectedToken(token.clone())),
         }
@@ -499,7 +449,7 @@ impl<'a> Parser<'a> {
             self.curr += 1;
         }
 
-        let curr: &Token = self.prev().unwrap();
+        let curr: &Token = self.prev();
         Ok(curr)
     }
 
@@ -507,7 +457,7 @@ impl<'a> Parser<'a> {
         if tokens
             .iter()
             .cloned()
-            .any(|token| !self.is_at_end() && self.current().unwrap() == token)
+            .any(|token| !self.is_at_end() && self.current() == token)
         {
             self.advance();
             return true;
@@ -521,7 +471,7 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        let curr = self.current().unwrap();
+        let curr = self.current();
         if curr != expected {
             return false;
         }
@@ -530,31 +480,31 @@ impl<'a> Parser<'a> {
         return true;
     }
 
-    fn peek(&self) -> Option<&Token> {
-        self.tokens.get(self.curr)
+    fn peek(&self) -> &Token {
+        match self.tokens.get(self.curr) {
+            Some(token) => token,
+            None => panic!("Invalid token"),
+        }
     }
 
-    fn prev(&self) -> Option<&Token> {
-        self.tokens.get(self.curr - 1)
+    fn prev(&self) -> &Token {
+        match self.tokens.get(self.curr - 1) {
+            Some(token) => token,
+            None => panic!("Invalid token"),
+        }
     }
 
-    fn next(&self) -> Option<&Token> {
-        self.tokens.get(self.curr + 1)
+    fn next(&self) -> &Token {
+        self.tokens.get(self.curr + 1).unwrap()
     }
 
     fn is_at_end(&self) -> bool {
-        match self.current() {
-            Some(curr) => curr == TokenType::EOS,
-            _ => false,
-        }
+        self.current() == TokenType::EOS
     }
 
-    fn current(&self) -> Option<TokenType> {
+    fn current(&self) -> TokenType {
         let curr = self.peek();
-        match curr {
-            Some(token) => Some(token.token_type.clone()),
-            None => None,
-        }
+        curr.token_type.clone()
     }
 }
 
@@ -600,14 +550,14 @@ mod tests {
         let mut parser = Parser::from_tokens(&tokens);
         let token = parser.current();
         parser.advance();
-        assert_eq!(token.unwrap(), TokenType::Add);
+        assert_eq!(token, TokenType::Add);
 
         let token = parser.current();
         parser.advance();
-        assert_eq!(token.unwrap(), TokenType::Sub);
+        assert_eq!(token, TokenType::Sub);
 
         let token = parser.current();
         parser.advance();
-        assert_eq!(token.unwrap(), TokenType::Multiply);
+        assert_eq!(token, TokenType::Multiply);
     }
 }
