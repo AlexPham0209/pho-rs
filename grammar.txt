@@ -27,8 +27,6 @@ return = 'ret' expression?
 # variable
 var = 'set' identifier '=' expression
 
-# varassign
-var_assign = (call ".")? identifier ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '**=') expression
 
 # if statement
 if = 'if' expression block elif* ('else' block)?
@@ -39,7 +37,7 @@ switch = 'switch' expression '{' match* '}'
 match = 'case' expression block
 
 # while 
-while = 'while' expression '{' statements '}'
+while = 'while' expression block
 
 # for
 for = 'for' identifier 'in' (identifier | range) block
@@ -49,19 +47,25 @@ range = int ('..' | '..=') int?
 
 # expressions
 expression_statement = expression
-expression = or 
+expression = or assignment? 
+assignment = ('=' | '+=' | '-=' | '*=' | '/=' | '//=' | '**=') expression
 
 or = and '(or' or)?
 and = equality ('and' equality)*
 equality = comparison (('==' | '!=') comparison)*
 comparison = term (('>' | '>=' | '<' | '<=') term)*
 term = factor (('+' | '-') factor)*
-factor = exponent (('*' | '/' | '//') exponent)*
+factor = exponent (('*' | '/' | '//' | 'mod') exponent)*
 exponent = unary '**' unary
-unary = ('!' | '-') unary | call | primary
-call = identifier ('(' arguments ')' | '.' identifier)* 
+unary = ('!' | '-') unary | call
+call = primary postfix_expression* 
+postfix_expression = '(' arguments? ')' 
+    | '[' expression ']'
+    | '.' identifier
+    | '++'
+    | '--'
 arguments =  primary (',' primary)* 
-primary = string | float | int | bool | "(" expression ")"
+primary = string | float | int | bool | identifier | "(" expression ")"
 
 types = 'string'
     | 'int'

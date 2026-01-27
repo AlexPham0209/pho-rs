@@ -10,12 +10,20 @@ pub enum Statement {
     Expression(Expr),
     Return(Return),
     If(If),
-    Elif(Elif),
+    While(While),
+    Function(Function)
 }
 
 #[derive(Debug)]
 pub struct Class {
     variables: Vec<Variable>,
+}
+
+#[derive(Debug)]
+pub struct Function {
+    pub identifier: String,
+    pub parameters: Vec<String>,
+    pub block: Box<Block>
 }
 
 #[derive(Debug)]
@@ -51,6 +59,12 @@ pub struct If {
 
 #[derive(Debug)]
 pub struct Elif {
+    pub condition: Box<Expr>,
+    pub block: Box<Block>,
+}
+
+#[derive(Debug)]
+pub struct While {
     pub condition: Box<Expr>,
     pub block: Box<Block>,
 }

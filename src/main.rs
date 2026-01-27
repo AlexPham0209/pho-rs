@@ -12,16 +12,10 @@ mod vm;
 fn main() {
     let lexer = Lexer::from_string(
         "
-        if (5 == true) {
-            ret 5
-        } 
-
-        elif (6 != 5) {
-            set x = 5
-        }
-        
-        else {
-         
+        fun test(a, b) {
+            if (i == 0) {
+                set x = 5
+            }
         }
     ",
     );

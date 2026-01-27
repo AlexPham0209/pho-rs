@@ -1,9 +1,9 @@
 use core::panic;
 
 use crate::{
-    expr::{self, BinaryOp, BinaryOpType, Expr, LogicalOp, LogicalOpType, UnaryOp, UnaryOpType},
+    expr::{self, Assignment, BinaryOp, BinaryOpType, Expr, LogicalOp, LogicalOpType, UnaryOp, UnaryOpType},
     lexer::{NumberType, Token, TokenType},
-    statement::{self, Block, Elif, If, Return, Statement, Variable},
+    statement::{self, Block, Elif, Function, If, Return, Statement, Variable, While},
 };
 
 pub struct Parser<'a> {
@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
     fn declaration(&mut self) -> Result<Statement, Error> {
         let token = match self.current() {
             Some(TokenType::Class) => todo!(),
-            Some(TokenType::Function) => todo!(),
+            Some(TokenType::Function) => self.function(),
             Some(_) => self.statement(),
             None => Err(Error::DeclarationError {
                 token: self.current().unwrap().clone(),
@@ -87,6 +87,46 @@ impl<'a> Parser<'a> {
         };
 
         token
+    }
+
+    fn function(&mut self) -> Result<Statement, Error> {
+        self.advance()?;
+        let identifier = self.consume(TokenType::Identifier)?;
+        let lexeme = identifier.lexeme.clone();
+        let mut parameters = Vec::<String>::new();
+
+        // Parameters
+        self.consume(TokenType::OpenParenthesis)?;
+        if self.check(TokenType::Identifier) {
+            parameters.push(self.prev().unwrap().lexeme.clone());
+
+            while self.check(TokenType::Comma) {
+                self.consume(TokenType::Identifier)?;
+                let parameter = self.prev().unwrap().lexeme.clone();
+                parameters.push(parameter);
+            }
+        }
+        self.consume(TokenType::CloseParenthesis)?;
+        
+        let block = match self.block()? {
+            Statement::Block(block) => block,
+            _ => {
+                return Err(Error::StatementError {
+                    token: self.current().unwrap(),
+                    line: self.peek().unwrap().line,
+                    col: self.peek().unwrap().line,
+                });
+            }
+        };
+
+        Ok(Statement::Function(Function {
+            identifier: lexeme,
+            block: Box::new(block),
+            parameters,
+        }))
+
+
+
     }
 
     // fn class(&mut self) -> Result<Statement, Error> {
@@ -115,22 +155,15 @@ impl<'a> Parser<'a> {
             Some(TokenType::If) => self.if_statement(),
             Some(TokenType::Switch) => todo!(),
             Some(TokenType::For) => todo!(),
-            Some(TokenType::While) => todo!(),
-            Some(TokenType::Identifier) => todo!(),
+            Some(TokenType::While) => self.while_statement(),
             Some(TokenType::OpenCurlyBrace) => self.block(),
             Some(TokenType::Return) => self.return_statement(),
-            Some(token) => self.expression_statement(),
             Some(TokenType::EOS) | None => Err(Error::EOS {
                 token: self.current().unwrap(),
                 line: self.peek().unwrap().line,
                 col: self.peek().unwrap().line,
             }),
-
-            Some(_) => Err(Error::StatementError {
-                token: self.current().unwrap(),
-                line: self.peek().unwrap().line,
-                col: self.peek().unwrap().line,
-            }),
+            Some(_) => self.expression_statement(),
         }
     }
 
@@ -148,7 +181,7 @@ impl<'a> Parser<'a> {
     }
 
     fn block(&mut self) -> Result<Statement, Error> {
-        self.advance()?;
+        self.consume(TokenType::OpenCurlyBrace)?;
         let mut statements = Vec::<Statement>::new();
 
         while !self.check(TokenType::CloseCurlyBrace) {
@@ -159,14 +192,13 @@ impl<'a> Parser<'a> {
     }
 
     fn if_statement(&mut self) -> Result<Statement, Error> {
-        self.advance()?;    
-        
+        self.advance()?;
+
         // Condition
         self.consume(TokenType::OpenParenthesis)?;
         let condition = self.expression()?;
         self.consume(TokenType::CloseParenthesis)?;
-        
-    
+
         // Block
         let block = match self.block()? {
             Statement::Block(block) => block,
@@ -174,7 +206,7 @@ impl<'a> Parser<'a> {
                 return Err(Error::StatementError {
                     token: self.current().unwrap(),
                     line: self.peek().unwrap().line,
-                    col: self.peek().unwrap().line,
+                    col: self.peek().unwrap().start,
                 });
             }
         };
@@ -233,6 +265,29 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn while_statement(&mut self) -> Result<Statement, Error> {
+        self.advance()?;
+        self.consume(TokenType::OpenParenthesis)?;
+        let expr = self.expression()?;
+        self.consume(TokenType::CloseParenthesis)?;
+
+        let block = match self.block()? {
+            Statement::Block(block) => block,
+            _ => {
+                return Err(Error::StatementError {
+                    token: self.current().unwrap(),
+                    line: self.peek().unwrap().line,
+                    col: self.peek().unwrap().line,
+                });
+            }
+        };
+
+        Ok(Statement::While(While {
+            condition: Box::new(expr),
+            block: Box::new(block),
+        }))
+    }
+
     fn return_statement(&mut self) -> Result<Statement, Error> {
         self.advance()?;
         let expr = self.expression()?;
@@ -247,6 +302,26 @@ impl<'a> Parser<'a> {
 
     fn expression(&mut self) -> Result<Expr, Error> {
         let or = self.or()?;
+
+        if self.check_tokens(&[
+            TokenType::AddAssign,
+            TokenType::SubAssign,
+            TokenType::MultiplyAssign,
+            TokenType::ExponentAssign,
+            TokenType::DivideAssign,
+            TokenType::IntDivide,
+            TokenType::Equal,
+        ]) {
+            let op = self.prev().unwrap().token_type.clone(); 
+            let value = self.expression()?;
+            return Ok(
+                Expr::Assignment(Assignment {
+                    left: Box::new(or),
+                    right: Box::new(value),
+                    op,
+                })
+            )
+        }
         Ok(or)
     }
 
@@ -256,7 +331,7 @@ impl<'a> Parser<'a> {
         if self.check(TokenType::Or) {
             let right: Expr = self.or()?;
             return Ok(Expr::LogicalOp(LogicalOp {
-                op: LogicalOpType::Or,
+                op: TokenType::Or,
                 left: Box::new(left),
                 right: Box::new(right),
             }));
@@ -271,7 +346,7 @@ impl<'a> Parser<'a> {
         if self.check(TokenType::And) {
             let right: Expr = self.and()?;
             return Ok(Expr::LogicalOp(LogicalOp {
-                op: LogicalOpType::And,
+                op: TokenType::And,
                 left: Box::new(left),
                 right: Box::new(right),
             }));
@@ -284,9 +359,7 @@ impl<'a> Parser<'a> {
         let left = self.comparison()?;
 
         if self.check_tokens(&[TokenType::EqualEqual, TokenType::NotEqual]) {
-            let op = self.prev().unwrap();
-            let op = Parser::convert_to_logical_op(op)?;
-            
+            let op = self.prev().unwrap().token_type.clone();
             let right = self.equality()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -308,8 +381,7 @@ impl<'a> Parser<'a> {
             TokenType::Greater,
             TokenType::GreaterEqual,
         ]) {
-            let op = self.prev().unwrap();
-            let op = Parser::convert_to_logical_op(op)?;
+            let op = self.prev().unwrap().token_type.clone();
             let right = self.comparison()?;
 
             return Ok(Expr::LogicalOp(LogicalOp {
@@ -326,8 +398,7 @@ impl<'a> Parser<'a> {
         let left = self.factor()?;
 
         if self.check_tokens(&[TokenType::Add, TokenType::Sub]) {
-            let op = self.prev().unwrap();
-            let op = Parser::convert_to_binary_op(op)?;
+            let op = self.prev().unwrap().token_type.clone();
             let right = self.term()?;
 
             return Ok(Expr::BinaryOp(BinaryOp {
@@ -344,8 +415,7 @@ impl<'a> Parser<'a> {
         let left = self.exponent()?;
 
         if self.check_tokens(&[TokenType::Multiply, TokenType::Divide, TokenType::IntDivide]) {
-            let op = self.prev().unwrap();
-            let op = Parser::convert_to_binary_op(op)?;
+            let op = self.prev().unwrap().token_type.clone();
             let right = self.factor()?;
             return Ok(Expr::BinaryOp(BinaryOp {
                 op: op,
@@ -363,7 +433,7 @@ impl<'a> Parser<'a> {
         if self.check(TokenType::Exponent) {
             let right: Expr = self.exponent()?;
             return Ok(Expr::BinaryOp(BinaryOp {
-                op: BinaryOpType::Exponent,
+                op: TokenType::Exponent,
                 left: Box::new(left),
                 right: Box::new(right),
             }));
@@ -375,17 +445,8 @@ impl<'a> Parser<'a> {
     fn unary(&mut self) -> Result<Expr, Error> {
         if self.check_tokens(&[TokenType::Sub, TokenType::Not]) {
             let prev = self.prev().unwrap();
-            let op = match &prev.token_type {
-                TokenType::Sub => UnaryOpType::Neg,
-                TokenType::Not => UnaryOpType::Not,
-                _ => {
-                    return Err(Error::BinaryOpError {
-                        token: prev.token_type.clone(),
-                        line: prev.line,
-                        col: prev.start,
-                    });
-                }
-            };
+            let op = prev.token_type.clone();
+
             let value = self.unary()?;
             return Ok(Expr::UnaryOp(UnaryOp {
                 op,
@@ -411,6 +472,9 @@ impl<'a> Parser<'a> {
                 self.consume(TokenType::CloseParenthesis)?;
                 expr
             }
+            TokenType::Identifier => Ok(Expr::Literal(Identifier(
+                self.prev().unwrap().lexeme.to_string(),
+            ))),
             token => Err(Error::UnexpectedToken(token.clone())),
         }
     }
@@ -482,44 +546,6 @@ impl<'a> Parser<'a> {
         match self.current() {
             Some(curr) => curr == TokenType::EOS,
             _ => false,
-        }
-    }
-
-    pub fn convert_to_logical_op(token: &Token) -> Result<LogicalOpType, Error> {
-        match token.token_type {
-            TokenType::EqualEqual => Ok(LogicalOpType::Equal),
-            TokenType::NotEqual => Ok(LogicalOpType::NotEqual),
-            TokenType::And => Ok(LogicalOpType::And),
-            TokenType::Or => Ok(LogicalOpType::Or),
-            TokenType::Less => Ok(LogicalOpType::Less),
-            TokenType::LessEqual => Ok(LogicalOpType::LessEqual),
-            TokenType::Greater => Ok(LogicalOpType::Greater),
-            TokenType::GreaterEqual => Ok(LogicalOpType::GreaterEqual),
-            _ => {
-                return Err(Error::UnaryOpError {
-                    token: token.token_type.clone(),
-                    line: token.line,
-                    col: token.start,
-                });
-            }
-        }
-    }
-
-    pub fn convert_to_binary_op(token: &Token) -> Result<BinaryOpType, Error> {
-        match token.token_type {
-            TokenType::Add => Ok(BinaryOpType::Add),
-            TokenType::Sub => Ok(BinaryOpType::Sub),
-            TokenType::Multiply => Ok(BinaryOpType::Multiply),
-            TokenType::Exponent => Ok(BinaryOpType::Exponent),
-            TokenType::Divide => Ok(BinaryOpType::Divide),
-            TokenType::IntDivide => Ok(BinaryOpType::IntDivide),
-            _ => {
-                return Err(Error::BinaryOpError {
-                    token: token.token_type.clone(),
-                    line: token.line,
-                    col: token.start,
-                });
-            }
         }
     }
 

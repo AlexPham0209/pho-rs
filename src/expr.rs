@@ -1,4 +1,4 @@
-use crate::lexer::NumberType;
+use crate::lexer::{NumberType, TokenType};
 
 #[derive(Debug)]
 pub enum Expr {
@@ -6,11 +6,13 @@ pub enum Expr {
     BinaryOp(BinaryOp),
     UnaryOp(UnaryOp),
     Literal(Literal),
+    Assignment(Assignment)
 }
 
 #[derive(Debug)]
 pub enum Literal {
     String(String),
+    Identifier(String),
     Int(i32),
     Float(f32),
     Bool(bool),
@@ -33,7 +35,7 @@ pub enum LogicalOpType {
 pub struct LogicalOp {
     pub left: Box<Expr>,
     pub right: Box<Expr>,
-    pub op: LogicalOpType,
+    pub op: TokenType,
 }
 
 #[derive(Debug)]
@@ -50,7 +52,7 @@ pub enum BinaryOpType {
 pub struct BinaryOp {
     pub left: Box<Expr>,
     pub right: Box<Expr>,
-    pub op: BinaryOpType,
+    pub op: TokenType,
 }
 
 #[derive(Debug)]
@@ -61,6 +63,13 @@ pub enum UnaryOpType {
 
 #[derive(Debug)]
 pub struct UnaryOp {
-    pub op: UnaryOpType,
+    pub op: TokenType,
     pub value: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Assignment {
+    pub left: Box<Expr>,
+    pub right: Box<Expr>,
+    pub op: TokenType 
 }
